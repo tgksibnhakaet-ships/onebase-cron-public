@@ -1,0 +1,45 @@
+name: OneBase Cron Jobs
+
+on:
+  schedule:
+    # Every 5 minutes - bridge queue poller + key migrator
+    - cron: '*/5 * * * *'
+    # Daily at 18:00 UTC (Bangladesh midnight) - daily summary
+    - cron: '0 18 * * *'
+    # Weekly Sunday 02:00 UTC - Supabase keep-alive ping (prevents 1wk inactivity pause)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+jobs:
+  # Every 5 minutes: hit the bridge's /cron endpoint
+  poll-bridge-queue:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '*/5 * * * *'
+    steps:
+      - name: Call bridge cron endpoint
+        run: |
+          curl -sS -X POST "$*** secrets.BRIDGE_URL }}/cron" \
+            -H "Authorization: Bearer *** secrets.CRON_TOKEN }}" \
+            --max-time 50 || echo "Bridge cron failed (timeout or error)"
+
+  # Daily summary at 18:00 UTC
+  daily-summary:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 18 * * *'
+    steps:
+      - name: Trigger daily summary
+        run: |
+          curl -sS -X POST "$*** secrets.BRIDGE_URL }}/api/cron/daily-summary" \
+            -H "Authorization: Bearer *** secrets.CRON_TOKEN }}" \
+            --max-time 50
+
+  # Weekly Supabase keep-alive (prevents 1-week inactivity pause)
+  supabase-keepalive:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 2 * * 0'
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -sS "$*** secrets.SUPABASE_URL }}/rest/v1/" \
+            -H "apikey: *** secrets.SUPABASE_ANON_KEY }}" \
+            --max-time 30
